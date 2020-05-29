@@ -24,7 +24,7 @@ gst_dep = dependency('gstreamer-1.0',
 
 #gstbase_dep = dependency('gstreamer-base-1.0', version : gst_req,
 #  fallback : ['gstreamer', 'gst_base_dep'])
-gstbase_dep = dependency('gstreamer-base-1.0', version : gst_req,
+gstbase_dep = dependency('gstreamer-base-1.0',
   fallback : ['gstreamer', 'gst_base_dep'])
 
 subdir('MyFilter')
