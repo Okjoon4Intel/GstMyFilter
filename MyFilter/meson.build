@@ -10,7 +10,7 @@ cdata.set_quoted('GST_PACKAGE_ORIGIN', 'https://gstreamer.freedesktop.org')
 configure_file(output : 'config.h', configuration : cdata)
 
 plugin_sources = [
-  'MyFilter/gstmyfilter.c'
+  'gstmyfilter.c'
   ]
 
 gstpluginexample = library('gstmyfilter',
