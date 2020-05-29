@@ -14,10 +14,14 @@ plugin_sources = [
   'gstiestsdemux.c'
   ]
 
-gstpluginexample = library('gstiestsdemux',
+gstiestsdemux_plugin = library('gstiestsdemux',
   plugin_sources,
   c_args: plugin_c_args,
-  dependencies : [gst_dep, libav_deps, gstbase_dep],
+  dependencies : libav_deps + [gst_dep, gstbase_dep],
   install : true,
   install_dir : plugins_install_dir,
 )
+
+pkgconfig.generate(gstiestsdemux_plugin, install_dir : plugins_pkgconfig_install_dir)
+plugins += [gstiestsdemux_plugin]
+
