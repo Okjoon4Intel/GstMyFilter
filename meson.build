@@ -22,5 +22,8 @@ libav_deps = [libavfilter_dep, libavformat_dep, libavcodec_dep, libavutil_dep]
 gst_dep = dependency('gstreamer-1.0',
     fallback : ['gstreamer', 'gst_dep'])
 
+gstbase_dep = dependency('gstreamer-base-1.0', version : gst_req,
+  fallback : ['gstreamer', 'gst_base_dep'])
+
 subdir('MyFilter')
 subdir('IESTsDemux')
