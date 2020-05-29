@@ -17,7 +17,7 @@ plugin_sources = [
 gstpluginexample = library('gstiestsdemux',
   plugin_sources,
   c_args: plugin_c_args,
-  dependencies : [gst_dep, libav_deps],
+  dependencies : [gst_dep, libav_deps, gstbase_dep],
   install : true,
   install_dir : plugins_install_dir,
 )
