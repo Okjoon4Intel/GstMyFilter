@@ -951,7 +951,11 @@ iestsdemux_init(GstPlugin * iestsdemux)
 {
 	// debug category for fltering log messages
 	GST_DEBUG_CATEGORY_INIT(gst_iestsdemux_debug, "IESTsDemux", 1, "IES MPEG TS Demuxer");
-	
+
+#ifdef __APPLE__
+    av_register_all();
+#endif
+
 	init_avdemux();
 
 	GstStaticCaps sink_static_caps = TSDEMUX_SINK_STATIC_CAPS;
