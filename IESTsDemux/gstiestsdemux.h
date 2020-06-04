@@ -27,9 +27,6 @@ G_BEGIN_DECLS
 
 #define TSDEMUX_SINK_STATIC_CAPS		GST_STATIC_CAPS("video/mpegts, " "systemstream = (boolean)true ")
 #define TSDEMUX_SINK_MEDIA_TYPE			"mpegts"
-#define TSDEMUX_SRC_VIDEO_MIME_TYPE		"video/x-h264"
-#define TSDEMUX_SRC_AUDIO_MIME_TYPE		"audio/mpeg"
-#define TSDEMUX_SRC_METADATA_MIME_TYPE	"application/x-id3"
 #define TSDEMUX_TYPEFIND_NAME			"ies_mpegts"
 
 typedef enum AVMediaType		   GstMediaType;

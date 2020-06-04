@@ -3,6 +3,7 @@
 
 #include <gst/gst.h>
 #include <libavformat/avformat.h>
+#include <libavutil/mathematics.h>
 #include <gst/base/gstadapter.h>
 
 // Macros

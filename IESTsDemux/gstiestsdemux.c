@@ -101,6 +101,9 @@ static gboolean av_streams_seek(Gstiestsdemux * demux, GstSegment * segment);
 static GstAVStream * av_streams_demux(Gstiestsdemux * demux, GstBuffer ** buff);
 static gboolean av_streams_parse_stream(Gstiestsdemux * demux, AVStream * avstream, int index);
 static void av_streams_parse_metadata_to_taglists(Gstiestsdemux * demux);
+static GstCaps* av_streams_make_videocaps(enum AVCodecID codec_id, int width, int height, double frame_rate);
+static GstCaps* av_streams_make_audiocaps(enum AVCodecID codec_id, int channels, int sample_rate);
+static GstCaps* av_streams_make_metadatacaps();
 
 /*
  * Initialize the iestsdemux's class
@@ -738,7 +741,6 @@ gst_iestsdemux_sink_activate_pullmode(GstPad * sinkpad, GstObject * parent, gboo
 		result = gst_pad_start_task(sinkpad, (GstTaskFunction)gst_iestsdemux_loop, demux, NULL);
 	}
 	else {
-		// JK DEBUG
 		result = gst_pad_stop_task(sinkpad);
 	}
 
@@ -1035,7 +1037,7 @@ av_streams_open(Gstiestsdemux * demux)
 
 	gst_element_no_more_pads(GST_ELEMENT(demux));
 
-	// TODO: Revist transform some useful info to GstClockTime and remember
+	// TODO: Revisit. Need to convert some useful info to GstClockTime and keep it
 	demux->start_time = gst_util_uint64_scale_int(fmt_ctx->start_time, GST_SECOND, AV_TIME_BASE);
 	GST_DEBUG("start time: %" GST_TIME_FORMAT, GST_TIME_ARGS(demux->start_time));
 	if (fmt_ctx->duration > 0)
@@ -1128,7 +1130,7 @@ av_streams_parse_stream(Gstiestsdemux * demux, AVStream * av_stream, int index)
 	AVCodecContext *codec_context = NULL;
 	GstAVStream *gst_stream = NULL;
 
-	GstPadTemplate *templ = NULL;	// JK DEBUG
+	GstPadTemplate *templ = NULL;
 	GstPad *pad = NULL;
 	GstCaps *caps = NULL;
 	int pad_index = -1;
@@ -1161,63 +1163,41 @@ av_streams_parse_stream(Gstiestsdemux * demux, AVStream * av_stream, int index)
 	switch (codec_context->codec_type) {
 		case AVMEDIA_TYPE_VIDEO:
 		{
-			if (codec_context->codec_id != AV_CODEC_ID_H264)
+			double fps = av_q2d(av_stream->avg_frame_rate);
+			caps = av_streams_make_videocaps(codec_context->codec_id, codec_context->width, codec_context->height, fps);
+			if (!caps)
 				break;
+
 			if (demux->active_video_stream_index == -1)
 				demux->active_video_stream_index = index;
 			pad_index = demux->num_of_video_streams++;
 			templ = klass->video_src_template;
-
-			// Create a caps
-			if (codec_context->width != -1 && codec_context->height != -1) {
-				caps = gst_caps_new_simple(TSDEMUX_SRC_VIDEO_MIME_TYPE,
-					"width", G_TYPE_INT, codec_context->width,
-					"height", G_TYPE_INT, codec_context->height,
-					//"framerate", G_TYPE_DOUBLE, av_q2d(av_stream->r_frame_rate), NULL);
-					"framerate", GST_TYPE_FRACTION, 1, 1, NULL);	// TODO
-			}
-			else {
-				caps = gst_caps_new_empty_simple(TSDEMUX_SRC_VIDEO_MIME_TYPE);
-			}
-
-			gst_caps_set_simple(caps, "alignment", G_TYPE_STRING, "au",
-				"stream-format", G_TYPE_STRING, "byte-stream", NULL);
 			break;
 		}
 
 		case AVMEDIA_TYPE_AUDIO:
 		{
-			if (codec_context->codec_id != AV_CODEC_ID_AAC)
+			caps = av_streams_make_audiocaps(codec_context->codec_id, codec_context->channels, codec_context->sample_rate);
+			if (!caps)
 				break;
+
 			if (demux->active_audio_stream_index == -1)
 				demux->active_audio_stream_index = index;
 			pad_index = demux->num_of_audio_streams++;
 			templ = klass->audio_src_template;
-
-			if (codec_context->channels != -1) {
-				caps = gst_caps_new_simple(TSDEMUX_SRC_AUDIO_MIME_TYPE,
-					"rate", G_TYPE_INT, codec_context->sample_rate,
-					"channels", G_TYPE_INT, codec_context->channels, NULL);
-
-				// TODO: is the "channel-mask" is required?
-			}
-			else {
-				caps = gst_caps_new_empty_simple(TSDEMUX_SRC_AUDIO_MIME_TYPE);
-			}
-
-			gst_caps_set_simple(caps, "mpegversion", G_TYPE_INT, 4,
-				"base-profile", G_TYPE_STRING, "lc", NULL);
 			break;
 		}
 
 		case AVMEDIA_TYPE_DATA:
 		{
+			caps = av_streams_make_metadatacaps();
+			if (!caps)
+				break;
+
 			if (demux->active_metadata_stream_index == -1)
 				demux->active_metadata_stream_index = index;
 			pad_index = demux->num_of_metadata_streams++;
 			templ = klass->metadata_src_template;
-
-			caps = gst_caps_new_empty_simple(TSDEMUX_SRC_METADATA_MIME_TYPE);
 			break;
 		}
 
@@ -1427,7 +1407,7 @@ av_streams_demux(Gstiestsdemux * demux, GstBuffer ** gst_buff)
 		duration = GST_CLOCK_TIME_NONE;
 	}
 
-	GST_DEBUG("Packet Info: pts=%" GST_TIME_FORMAT " / size=%d / stream_index=%d / flags=%d / duration=%" GST_TIME_FORMAT " / pos=%" G_GINT64_FORMAT,
+	GST_DEBUG("Packet Info: pts=%" GST_TIME_FORMAT " / size=%d / stream_index=%d / flags=%d / duration=%" GST_TIME_FORMAT " / position=%" G_GINT64_FORMAT,
 		GST_TIME_ARGS(position), packet->size, packet->stream_index, packet->flags, GST_TIME_ARGS(duration), (gint64)packet->pos);
 
 	// Adjust the timestamp
@@ -1552,3 +1532,87 @@ av_streams_parse_metadata_to_taglists(Gstiestsdemux * demux)
 		}
 	}
 }
+
+static GstCaps*
+av_streams_make_videocaps(enum AVCodecID codec_id, int width, int height, double fps) {
+
+	GstCaps *caps = NULL;
+
+	// Get the framerate
+	int num = 1, den = 1;
+	if (fps > 0)
+		gst_util_double_to_fraction(fps, &num, &den);
+	
+	switch (codec_id) {
+	case AV_CODEC_ID_H264:
+		if (width != -1 && height != -1) {
+			caps = gst_caps_new_simple("video/x-h264",
+				"width", G_TYPE_INT, width,
+				"height", G_TYPE_INT, height,
+				"framerate", GST_TYPE_FRACTION, num, den, NULL);
+		}
+		else {
+			caps = gst_caps_new_empty_simple("video/x-h264");
+		}
+		break;
+
+	case AV_CODEC_ID_HEVC:
+		if (width != -1 && height != -1) {
+			caps = gst_caps_new_simple("video/x-h265",
+				"width", G_TYPE_INT, width,
+				"height", G_TYPE_INT, height,
+				"framerate", GST_TYPE_FRACTION, num, den, NULL);
+		}
+		else {
+			caps = gst_caps_new_empty_simple("video/x-h265");
+		}
+		break;
+	}
+
+	if (caps) {
+		gst_caps_set_simple(caps, "alignment", G_TYPE_STRING, "au",
+			"stream-format", G_TYPE_STRING, "byte-stream", NULL);
+	}
+
+	return caps;
+}
+
+
+static GstCaps*
+av_streams_make_audiocaps(enum AVCodecID codec_id, int channels, int sample_rate) {
+	GstCaps *caps = NULL;
+
+	switch (codec_id) {
+	case AV_CODEC_ID_AAC:
+		if (channels != -1) {
+			caps = gst_caps_new_simple("audio/mpeg",
+				"rate", G_TYPE_INT, sample_rate,
+				"channels", G_TYPE_INT, channels, NULL);
+
+			// TODO: is the "channel-mask" is required?
+		}
+		else {
+			caps = gst_caps_new_empty_simple("audio/mpeg");
+		}
+		break;
+	}
+
+	if (caps) {
+		gst_caps_set_simple(caps, "mpegversion", G_TYPE_INT, 4,
+			"base-profile", G_TYPE_STRING, "lc", NULL);
+	}
+
+	return caps;
+}
+
+static GstCaps*
+av_streams_make_metadatacaps() {
+	GstCaps *caps = NULL;
+
+	caps = gst_caps_new_empty_simple("application/x-id3");
+
+	return caps;
+}
+
+
+
